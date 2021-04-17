@@ -1,20 +1,24 @@
+////===========================================================
+//// bankers_algorithm.cpp
+////===========================================================
+//
 #include <iostream>
 #include <fstream>
+#include <cstring>
+#include <initializer_list>
+
 #include "ext_vector.h"
-#include "bankexample.h"
-#include "customerexample.h"
+#include "bank.h"
+#include "customer.h"
 #include "utils.h"
 
-
-//#include "customer.h"
-//#include "bank.h"
-//
 //
 pthread_mutex_t mutex_;  // prevents intermingled printing by threads (customers)
 //
 //
 void run_customer_bank_tests() {
   ext_vector<int> alloc = { 3, 1, 5 };
+  
   ext_vector<int> max  = { 5, 2, 6 };
   ext_vector<int> need = max - alloc;
   ext_vector<int> avail = alloc + need + ext_vector<int>({ 3, 3, 3 });
@@ -23,11 +27,11 @@ void run_customer_bank_tests() {
   std::cout << "  max: " << max  << "\n";
   std::cout << " need: " << need << "\n";
 
-  CustomerExample c0(0, alloc, max);
-  CustomerExample c1(1, max,   max);
+  Customer c0(0, alloc, max);
+  Customer c1(1, max,   max);
   ext_vector<int> maxe = alloc + avail;
-  CustomerExample c2(2, alloc, maxe);
-  BankExample* pBank = new BankExample(avail);
+  Customer c2(2, alloc, maxe);
+  Bank* pBank = new Bank(avail);
 
   std::cout << "\nCustomer: " << c0;
   std::cout << "needs met? " << Utils::yes_or_no(c0.needs_met()) << "\n\n";
@@ -79,18 +83,20 @@ void run_customer_bank_tests() {
 //
 //
 void* runner(void* param) {           // thread runner
-  CustomerExample* c = (CustomerExample*)param;
+  Customer* c = (Customer*)param;
 
   pthread_mutex_lock(&mutex_);
   std::cout << "<<< Customer thread p#" << c->get_id() << " started... >>>\n";
   pthread_mutex_unlock(&mutex_);
 
-  BankExample* b = c->get_bank();
+  Bank* b = c->get_bank();
 
   while (!c->needs_met()) {
     ext_vector<int> req = c->create_req();
     int idx = c->get_id();
+    std::cout << "REQUEST of " << req << " for customer " << idx << " ";
     bool approved = b->req_approved(idx, req);
+    std::cout << "request was approved: " << Utils::yes_or_no(approved) << "\n";
 
     if (approved) {
       c->alloc_req(req);
@@ -104,14 +110,15 @@ void* runner(void* param) {           // thread runner
       }
     }
   }
-  pthread_mutex_lock(&mutex_);
+  //pthread_mutex_lock(&mutex_);
   std::cout << ">>>>>>>>>>>>>>> Customer thread p#" << c->get_id() << " shutting down... <<<<<<<<<<<<<<<<<\n\n";
-  pthread_mutex_unlock(&mutex_);
+  b->show();
+  //pthread_mutex_unlock(&mutex_);
 
   pthread_exit(0);
 }
 
-void run_simulation(BankExample* bank) {
+void run_simulation(Bank* bank) {
   std::cout << "\nBanker's algorithm simulation beginning...\n--------------------------------------------\n";
   bank->show();
 
@@ -123,13 +130,13 @@ void run_simulation(BankExample* bank) {
 
   pthread_mutex_init(&mutex_, &mutex_attr);
 
-  ext_vector<CustomerExample*> customers = bank->get_customers();
-  for (CustomerExample* c : customers) {
+  ext_vector<Customer*> customers = bank->get_customers();
+  for (Customer* c : customers) {
     pthread_create(c->get_threadid(), &attr, runner, c);
   }
 
 // join threads
-  for (CustomerExample* c : customers) {
+  for (Customer* c : customers) {
     pthread_join(*c->get_threadid(), NULL);
   }
 
@@ -159,7 +166,7 @@ void process_line(char* buf, ext_vector<int>& values) {    // gets values from o
   }
 }
 
-void process_file(const char* filename, BankExample*& bank) {    // extracts avail for Bank, customers' alloc and max
+void process_file(const char* filename, Bank*& bank) {    // extracts avail for Bank, customers' alloc and max
   char buf[BUFSIZ];
   ext_vector<int> res;  // resources
 
@@ -179,7 +186,7 @@ void process_file(const char* filename, BankExample*& bank) {    // extracts ava
 
     process_line(buf, res);
     if (first_line) {    // first line has bank's resources
-      bank = new BankExample(res);
+      bank = new Bank(res);
       first_line = false;
     } else {
       ext_vector<int> alloc;
@@ -189,23 +196,20 @@ void process_file(const char* filename, BankExample*& bank) {    // extracts ava
         alloc.add(res[i]);            // e.g., for size = 2,  0, 1
         max.add(res[i + size]);       // ditto,               2, 3
       }
-      CustomerExample* c = new CustomerExample(idx++, alloc, max, bank);
+      Customer* c = new Customer(idx++, alloc, max, bank);
       bank->add_customer(c);
     }
   }
   ifs.close();
 }
 
-void process_files(int argc, const char* argv[], BankExample*& bank) {    // processes all files in command line
+void process_files(int argc, const char* argv[], Bank*& bank) {    // processes all files in command line
   while (--argc > 0) {  // skip over program name
     const char* filename = *++argv;
     process_file(filename, bank);
 
     if (bank->get_customers().empty()) { std::cerr << "\t\tNo customers found... exiting...\n\n";  exit(1); }
     else { bank->show(); }   // TODO: remove this line
-    
-    run_simulation(bank);
-    std::cout << "\n\n\n";
   }
 }
 
@@ -216,13 +220,14 @@ int main(int argc, const char * argv[]) {
   
 //  run_customer_bank_tests();
 
-  BankExample* bank = nullptr;
+  Bank* bank = nullptr;
 
   verify(argc, argv);
   process_files(argc, argv, bank);
 
+  run_simulation(bank);
+  std::cout << "\n\n\n";
+
   std::cout << "\n\t\t...done.\n";
   return 0;
 }
-
-
