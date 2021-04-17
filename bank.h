@@ -17,19 +17,16 @@ public:
   ext_vector<int> get_avail() const { return avail; }
   bool is_avail(const ext_vector<int>& req) const { return req < avail; }
   
-  // TODO: determine if alloc is safe
   bool is_safe(int id, const ext_vector<int>& req){ 
-    // if we were to approve this request, could we at LEAST satisfy one future request?
     bool atleast = false;
 
-    // create copy of bank available resources
     ext_vector<int> bank_copy = this->avail;
-    // pseudo-approve request
+  
     bank_copy -= req;
 
-    // can we satisfy another request?
+   
     for(size_t x = 0; x < this->avail.size(); ++x){
-      if(x == id) continue; // don't count pseudo-approved request
+      if(x == id) continue;
       if(bank_copy >= this->customers[x]->create_req()){
          atleast = true;
       }
