@@ -79,5 +79,5 @@ private:
   
   Bank* bank;
 };
-
+ 
 #endif /* Customer_h */
